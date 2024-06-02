@@ -1,3 +1,4 @@
+import pickle
 from path import Path
 import numpy as np
 import sqlite3
@@ -115,19 +116,17 @@ def process_one_scene(scene_dir):
         for f in files:
             j = int(os.path.basename(f)[7:13])-1
 
-            one_pair = np.loadtxt(f)
+            one_pair = np.loadtxt(f, dtype=object)
+            print(one_pair.shape)
 
             two_view["src_idx"].append(j)
             two_view["match"].append(one_pair)
-
-        np.savez(outdir/'{:06d}.npz'.format(idx), **two_view)
+        
+        with open(outdir/'{:06d}.pkl'.format(idx), 'wb') as f:
+            pickle.dump(two_view, f)
 
 
 if __name__ == "__main__":
 
-    # data_dir = Path('./porf_data/dtu')
-    data_dir = Path('./porf_data/mobilebrick_test')
-    scene_dirs = sorted(data_dir.dirs())
-
-    for scene in scene_dirs:
-        process_one_scene(scene_dir=scene)
+    data_dir = Path("C:/Users/me/Downloads/fender_6_2/processed")
+    process_one_scene(scene_dir=data_dir)

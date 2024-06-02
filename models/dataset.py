@@ -118,7 +118,7 @@ class Dataset:
         self.gt_pose_all = np.stack(self.gt_pose_all)  # [n_images, 4, 4]
 
         # two_view files
-        two_view_files = sorted((Path(self.data_dir)/self.match_folder).files('*.npz'))
+        two_view_files = sorted((Path(self.data_dir)/self.match_folder).files('*.pkl'))
         self.two_views_all = []
         for f in two_view_files:
             self.two_views_all.append(np.load(f, allow_pickle=True))
