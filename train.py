@@ -97,10 +97,6 @@ class PoseRunner:
         self.optimizer_pose = torch.optim.Adam(self.pose_param_net.parameters(),
                                                lr=self.pose_learning_rate)
 
-        # validate pose for initial pose err analysis
-        if self.iter_step == 0:
-            self.validate_pose(initial_pose=True)
-
     def train(self):
         self.update_learning_rate()
         res_step = self.end_iter - self.iter_step
@@ -204,9 +200,6 @@ class PoseRunner:
             if self.iter_step % self.report_freq == 0:
                 print(self.base_exp_dir)
                 print('iter:{:8>d} loss = {} lr={}'.format(self.iter_step, loss, self.optimizer.param_groups[0]['lr']))
-
-            if self.iter_step % self.val_freq == 0:
-                self.validate_pose()
 
             self.update_learning_rate()
 
@@ -341,42 +334,6 @@ class PoseRunner:
 
         logging.info('End')
 
-    def validate_pose(self, initial_pose=False):
-        pose_dir = os.path.join(
-            self.base_exp_dir, 'poses_{:06d}'.format(self.iter_step))
-        os.makedirs(pose_dir, exist_ok=True)
-
-        scale_mat = self.dataset.object_scale_mat
-
-        pred_poses = []
-        for idx in range(self.dataset.n_images):
-            if initial_pose:
-                p = self.pose_param_net.get_init_pose(idx)
-            else:
-                p = self.pose_param_net(idx)
-            p = p.detach().cpu().numpy()
-            # scale and transform
-            t = scale_mat @ p[:, 3].T
-            p = np.concatenate([p[:, :3], t[:, None]], axis=1)
-            pred_poses.append(p)
-        pred_poses = np.stack(pred_poses)
-
-        np.savetxt(os.path.join(pose_dir, 'refined_pose.txt'),
-                   pred_poses.reshape(-1, 16),
-                   fmt='%.8f', delimiter=' ')
-
-        gt_poses = self.dataset.get_gt_pose()  # np, [n44]
-
-        pred_poses = utils.pose_alignment(pred_poses, gt_poses)
-
-        # ate
-        ate_rots, ate_trans = utils.compute_ATE(gt_poses, pred_poses)
-        ate_errs = np.stack([ate_rots, ate_trans], axis=-1)
-        ate_errs = np.concatenate([ate_errs, np.mean(ate_errs, axis=0).reshape(-1, 2)], axis=0)
-
-        self.writer.add_scalar('Val/ate_rot', np.mean(ate_errs, axis=0)[0] / 3.14 * 180, self.iter_step)
-        self.writer.add_scalar('Val/ate_trans', np.mean(ate_errs, axis=0)[1], self.iter_step)
-
 
 if __name__ == '__main__':
     print('Hello Wooden')
@@ -400,5 +357,3 @@ if __name__ == '__main__':
 
     if args.mode == 'train':
         runner.train()
-    elif args.mode == 'validate_pose':
-        runner.validate_pose()

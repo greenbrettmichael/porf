@@ -106,17 +106,6 @@ class Dataset:
 
         self.H, self.W = self.images.shape[2], self.images.shape[3]
 
-        # load gt pose for validation
-        gt_camera_dict = np.load(os.path.join(self.data_dir, 'cameras.npz'))
-        gt_world_mats_np = [gt_camera_dict['world_mat_%d' % idx].astype(np.float32) for idx in range(self.n_images)]
-        self.gt_pose_all = []
-        for world_mat in gt_world_mats_np:
-            P = world_mat @ scale_mat
-            P = P[:3, :4]
-            intrinsics, pose = load_K_Rt_from_P(None, P)
-            self.gt_pose_all.append(torch.from_numpy(pose).float())
-        self.gt_pose_all = np.stack(self.gt_pose_all)  # [n_images, 4, 4]
-
         # two_view files
         two_view_files = sorted((Path(self.data_dir)/self.match_folder).files('*.pkl'))
         self.two_views_all = []
@@ -205,9 +194,6 @@ class Dataset:
         rays_o = pose[None, :3, 3].expand(rays_v.shape)  # batch_size, 3
 
         return torch.cat([rays_o, rays_v, color], dim=-1)  # mask    # batch_size, 10
-
-    def get_gt_pose(self):
-        return self.gt_pose_all
 
     def sample_matches(self, img_idx, pose_net, num_pairs=20, max_matches=5000):
         # ref frame
