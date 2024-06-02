@@ -23,6 +23,12 @@ def get_keypoints(cursor, image_id):
     kypnts = kypnts[:, 0:2]
     return kypnts
 
+def read_pickle(filename):
+    with open(filename, 'rb') as f:
+        return pickle.load(f)
+
+def parse_colmap(filename):
+    return read_pickle(filename)
 
 def process_one_scene(scene_dir):
 
@@ -45,14 +51,36 @@ def process_one_scene(scene_dir):
     cursor = connection.cursor()
 
     list_image_ids = []
+
     img_ids_to_names_dict = {}
+    db_id_to_image_id = {}
+    sequence_id_to_image_id = {}
+    db_id_to_sequence_id = {}
+    poses, Ks, image_names, img_ids, center, scale, directions =parse_colmap(Path(scene_dir)/'cache.pkl')
+
     cursor.execute('SELECT image_id, name, cameras.width, cameras.height FROM images LEFT JOIN cameras ON images.camera_id == cameras.camera_id;')
     for row in cursor:
         image_idx, name, width, height = row
+        if image_idx not in img_ids:
+            db_id_to_image_id[image_idx] = -1
+            continue
         list_image_ids.append(image_idx)
         img_ids_to_names_dict[image_idx] = name
+        db_id_to_image_id[image_idx] = image_idx
+        sequence_id = len(list_image_ids)-1
+        sequence_id_to_image_id[sequence_id] = image_idx
+        db_id_to_sequence_id[image_idx] = sequence_id
 
     num_image_ids = len(list_image_ids)
+    
+    camera_dict = {}
+    for idx in range(num_image_ids):
+        img_id = sequence_id_to_image_id[idx]
+        camera_dict['world_mat_%d' % idx] = poses[img_id]
+        camera_dict['scale_mat_%d' % idx] = np.eye(4) * scale
+    np.savez(Path(scene_dir)/'cameras_colmap.npz', **camera_dict)
+
+    
 
     # Iterate over entries in the two-view geometry table
     cursor.execute('SELECT pair_id, rows, cols, data FROM two_view_geometries;')
@@ -81,25 +109,25 @@ def process_one_scene(scene_dir):
         #     continue
 
         id1, id2 = pair_id_to_image_ids(pair_id)
-        image_name1 = img_ids_to_names_dict[id1]
-        image_name2 = img_ids_to_names_dict[id2]
-
+        if db_id_to_image_id[id1] == -1 or db_id_to_image_id[id2] == -1:
+            continue
+        
         keys1 = get_keypoints(cursor, id1)
         keys2 = get_keypoints(cursor, id2)
+
+        id1 = db_id_to_sequence_id[id1]+1
+        id2 = db_id_to_sequence_id[id2]+1
 
         match_positions = np.empty([matches.shape[0], 4])
         for i in range(0, matches.shape[0]):
             match_positions[i, :] = np.array([keys1[matches[i, 0]][0], keys1[matches[i, 0]][1], keys2[matches[i, 1]][0], keys2[matches[i, 1]][1]])
 
-        # print(match_positions.shape)
-        # outfile = os.path.join(outdir, image_name1.split("/")[0].split(".jpg")[0] + "_" + image_name2.split("/")[0].split(".jpg")[0] + ".txt")
         outfile = os.path.join(outdir, '{:06d}_{:06d}.txt'.format(int(id1), int(id2)))
 
         np.savetxt(outfile, match_positions, delimiter=' ')
 
         # reverse and save
         match_positions_reverse = np.concatenate([match_positions[:, 2:4], match_positions[:, 0:2]], axis=1)
-        # outfile = os.path.join(outdir, image_name2.split("/")[0].split(".jpg")[0] + "_" + image_name1.split("/")[0].split(".jpg")[0] + ".txt")
         outfile = os.path.join(outdir, '{:06d}_{:06d}.txt'.format(int(id2), int(id1)))
         np.savetxt(outfile, match_positions_reverse, delimiter=' ')
 
@@ -116,8 +144,7 @@ def process_one_scene(scene_dir):
         for f in files:
             j = int(os.path.basename(f)[7:13])-1
 
-            one_pair = np.loadtxt(f, dtype=object)
-            print(one_pair.shape)
+            one_pair = np.loadtxt(f)
 
             two_view["src_idx"].append(j)
             two_view["match"].append(one_pair)
