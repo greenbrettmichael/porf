@@ -200,6 +200,9 @@ class PoseRunner:
             if self.iter_step % self.report_freq == 0:
                 print(self.base_exp_dir)
                 print('iter:{:8>d} loss = {} lr={}'.format(self.iter_step, loss, self.optimizer.param_groups[0]['lr']))
+            
+            if self.iter_step % self.val_freq == 0:
+                self.validate_pose()
 
             self.update_learning_rate()
 
@@ -313,6 +316,29 @@ class PoseRunner:
                                         'normals',
                                         '{:0>8d}_{}_{}.png'.format(self.iter_step, i, idx)),
                            normal_img[..., i])
+    
+    def validate_pose(self):
+        pose_dir = os.path.join(
+            self.base_exp_dir, 'poses_{:06d}'.format(self.iter_step))
+        os.makedirs(pose_dir, exist_ok=True)
+
+        scale_mat = self.dataset.object_scale_mat
+
+        pred_poses = []
+        for idx in range(self.dataset.n_images):
+            p = self.pose_param_net(idx)
+            p = p.detach().cpu().numpy()
+            # scale and transform
+            t = scale_mat @ p[:, 3].T
+            p = np.concatenate([p[:, :3], t[:, None]], axis=1)
+            pred_poses.append(p)
+        pred_poses = np.stack(pred_poses)
+
+        np.savetxt(os.path.join(pose_dir, 'refined_pose.txt'),
+                   pred_poses.reshape(-1, 16),
+                   fmt='%.8f', delimiter=' ')
+
+
 
     def validate_mesh(self, world_space=True, resolution=256, threshold=0.0):
         bound_min = self.dataset.object_bbox_min
