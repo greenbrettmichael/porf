@@ -78,6 +78,8 @@ def process_one_scene(scene_dir):
         img_id = sequence_id_to_image_id[idx]
         camera_dict['world_mat_%d' % idx] = poses[img_id]
         camera_dict['scale_mat_%d' % idx] = np.eye(4) * scale
+        camera_dict['image_name_%d' % idx] = image_names[img_id]
+    camera_dict['num_images'] = num_image_ids
     np.savez(Path(scene_dir)/'cameras_colmap.npz', **camera_dict)
 
     

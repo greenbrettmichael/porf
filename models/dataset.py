@@ -54,15 +54,13 @@ class Dataset:
 
         print(f'Load data: Begin from {self.data_dir}')
 
-        self.images_lis = sorted(glob(os.path.join(self.data_dir, 'image/*.png')))
-        if len(self.images_lis) < 1:
-            self.images_lis = sorted(glob(os.path.join(self.data_dir, 'image/*.jpg')))
-        if len(self.images_lis) < 1:
-            self.images_lis = sorted(glob(os.path.join(self.data_dir, 'rgb/*.png')))
-
-        self.n_images = len(self.images_lis)
-
+    
         camera_dict = np.load(os.path.join(self.data_dir, self.render_cameras_name))
+        self.n_images = camera_dict['num_images'].item()
+        self.images_lis = []
+        image_dir = os.path.join(self.data_dir, 'images')
+        for idx in range(self.n_images):
+            self.images_lis.append(os.path.join(image_dir,camera_dict['image_name_%d' % idx].item()))
         # world_mat is a projection matrix from world to image
         self.world_mats_np = [camera_dict['world_mat_%d' % idx].astype(np.float32) for idx in range(self.n_images)]
 
